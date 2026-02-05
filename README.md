@@ -58,3 +58,4 @@ node /Users/hummingbird/Develop/anjuke-demo/scripts/decode_image_url.js \
         根据decode_image_url.py文件
         解析出imageUrl,withoutDimensionLine,wallCenterLine,insideTheWall
         然后生成新的json文件，按城市，开发商，分页来整理json文件
+        其他的分页和跳转下一页保持原来的方式，不用再监听response中的image url了
