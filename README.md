@@ -12,3 +12,10 @@ node /Users/hummingbird/Develop/anjuke-demo/scripts/decode_image_url.js \
 
   node /Users/hummingbird/Develop/anjuke-demo/scripts/decode_image_url.js \
   "uU2uKMuKMuKKuK9uvKupqupquUTuKKuU2uUWuKpuUduUmuUquptuUtuKUuK9upFuUAuKyuUcuUWuUduKuuUqupFuUtuKUuKpupquUTuKKuU2upqup2upTup2upcupTuvvupTupWupqupTuUSuUSuUSupcuUSuUSuUqupcup2upmuUFuvUuvUupmuvUupFuUcuKKuUm"
+
+
+  非常好！上面的解码问题解决了
+  现在我要加一个新的版本需求
+  -decode_image_url.py备份一下
+  -重新命名一个下载户型图的python脚本
+  -基于decode_image_url.py备份一下
