@@ -167,24 +167,29 @@ def main():
                 while True:
                     url = build_url(city_code, dev_code, start, args.num)
 
-                    def on_request(req):
+                    def on_response(resp):
                         try:
-                            if req.resource_type != "image":
+                            if resp.request.resource_type != "image":
                                 return
                         except Exception:
                             return
-                        if IMG_RE.search(req.url):
-                            print(req.url)
-                            collected.add(req.url)
+                        url = resp.url
+                        if "fphimage-cos.kujiale.com" not in url:
+                            return
+                        if "imageMogr2/thumbnail" not in url:
+                            return
+                        if IMG_RE.search(url):
+                            print(url)
+                            collected.add(url)
 
-                    page.on("request", on_request)
+                    page.on("response", on_response)
                     try:
                         page.goto(url, wait_until="domcontentloaded", timeout=90000)
                     except Exception as e:
                         logger.warning("Goto failed: %s (%s)", url, e)
                     time.sleep(2.5)
                     try:
-                        page.remove_listener("request", on_request)
+                        page.remove_listener("response", on_response)
                     except Exception:
                         pass
 
