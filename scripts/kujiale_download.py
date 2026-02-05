@@ -33,6 +33,15 @@ def encode_dev_name(name: str) -> str:
     return f"{hex_str[:4]}-{hex_str[4:]}"
 
 
+
+
+def normalize_thumbnail_url(url: str) -> str:
+    # Force 992x992 thumbnail size.
+    if "imageMogr2/thumbnail" in url:
+        return re.sub(r"imageMogr2/thumbnail/\d+x\d+!", "imageMogr2/thumbnail/992x992!", url)
+    return url
+
+
 def download_image(url, out_dir: Path, seen, request_context):
     ext = Path(url.split("?", 1)[0]).suffix or ".jpg"
     name_hash = hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
@@ -173,11 +182,12 @@ def main():
                                 return
                         except Exception:
                             return
-                        url = resp.url
+                        url = normalize_thumbnail_url(resp.url)
                         if "fphimage-cos.kujiale.com" not in url:
                             return
                         if "imageMogr2/thumbnail" not in url:
                             return
+                        url = normalize_thumbnail_url(url)
                         if IMG_RE.search(url):
                             print(url)
                             collected.add(url)
@@ -187,7 +197,21 @@ def main():
                         page.goto(url, wait_until="domcontentloaded", timeout=90000)
                     except Exception as e:
                         logger.warning("Goto failed: %s (%s)", url, e)
-                    time.sleep(2.5)
+                    # wait until we have enough images for this page (or timeout)
+                    target = args.num
+                    last_count = -1
+                    stable_rounds = 0
+                    for _ in range(20):
+                        if len(collected) >= target:
+                            break
+                        if len(collected) == last_count:
+                            stable_rounds += 1
+                        else:
+                            stable_rounds = 0
+                            last_count = len(collected)
+                        if stable_rounds >= 3:
+                            break
+                        page.wait_for_timeout(500)
                     try:
                         page.remove_listener("response", on_response)
                     except Exception:
@@ -216,6 +240,7 @@ def main():
                     ok = 0
                     for img_url in new_urls:
                         try:
+                            img_url = normalize_thumbnail_url(img_url)
                             if download_image(img_url, out_dir, downloaded, page.request):
                                 ok += 1
                         except Exception as e:
