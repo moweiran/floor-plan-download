@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
 import argparse
-import hashlib
 import json
 import logging
 import re
 import time
+import shutil
+import subprocess
 from pathlib import Path
 
+import wasmtime
 from playwright.sync_api import sync_playwright
-
-IMG_RE = re.compile(
-    r"https?://[^\s\"')]+?\.(?:jpe?g|png|webp)(?:\?[^\s\"')]+)?",
-    re.IGNORECASE,
-)
 
 CITY_CODES = {
     "北京市": "36",
@@ -24,68 +21,82 @@ CITY_CODES = {
 DEV_NAMES = ["华润", "中海", "万科"]
 
 
+# --- decode helpers (from decode_image_url.py) ---
+
+def load_wasm(wasm_path: Path):
+    engine = wasmtime.Engine()
+    module = wasmtime.Module.from_file(engine, str(wasm_path))
+
+    def abort(a, b, c, d):
+        return None
+
+    store = wasmtime.Store(engine)
+    linker = wasmtime.Linker(engine)
+    abort_type = wasmtime.FuncType(
+        [
+            wasmtime.ValType.i32(),
+            wasmtime.ValType.i32(),
+            wasmtime.ValType.i32(),
+            wasmtime.ValType.i32(),
+        ],
+        [],
+    )
+    linker.define(store, "env", "abort",
+                  wasmtime.Func(store, abort_type, abort))
+
+    instance = linker.instantiate(store, module)
+    exports = instance.exports(store)
+    return store, exports
+
+
+def write_string(store, exports, s: str) -> int:
+    mem = exports["memory"]
+    new = exports["__new"]
+    data = s.encode("utf-16le")
+    ptr = new(store, len(data), 1)
+    mem.write(store, data, ptr)
+    return ptr
+
+
+def read_string(store, exports, ptr: int) -> str:
+    mem = exports["memory"]
+    size_bytes = mem.read(store, ptr - 4, ptr)
+    size = int.from_bytes(size_bytes, "little")
+    data = mem.read(store, ptr, ptr + size)
+    return data.decode("utf-16le")
+
+
+def decode_image_url(store, exports, encoded: str) -> str:
+    if not encoded:
+        return ""
+    if re.search(r"\.jpg|\.png|\.webp", encoded, re.I):
+        return encoded
+    decode_from_string = exports["decodeFromString"]
+    in_ptr = write_string(store, exports, encoded)
+    out_ptr = decode_from_string(store, in_ptr)
+    return read_string(store, exports, out_ptr)
+
+
+def to_992(url: str) -> str:
+    if not url:
+        return ""
+    if "imageMogr2/thumbnail/" in url:
+        return re.sub(
+            r"imageMogr2/thumbnail/\d+x\d+!",
+            "imageMogr2/thumbnail/992x992!",
+            url,
+        )
+    if "-cos" in url:
+        return url + "?imageMogr2/thumbnail/992x992!"
+    return url
+
+
 def encode_dev_name(name: str) -> str:
-    """开发商名称 → UTF-16BE十六进制编码"""
     if len(name) != 2:
         raise ValueError("仅支持2个汉字")
     utf16_bytes = name.encode("utf-16be")
     hex_str = utf16_bytes.hex()
     return f"{hex_str[:4]}-{hex_str[4:]}"
-
-
-
-
-def normalize_thumbnail_url(url: str) -> str:
-    # Force 992x992 thumbnail size.
-    if "imageMogr2/thumbnail" in url:
-        return re.sub(r"imageMogr2/thumbnail/\d+x\d+!", "imageMogr2/thumbnail/992x992!", url)
-    return url
-
-
-def download_image(url, out_dir: Path, seen, request_context):
-    ext = Path(url.split("?", 1)[0]).suffix or ".jpg"
-    name_hash = hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
-    filename = f"{name_hash}{ext}"
-    if filename in seen:
-        return False
-    out_path = out_dir / filename
-    if out_path.exists():
-        seen.add(filename)
-        return False
-    resp = request_context.get(url, timeout=30000)
-    if not resp.ok:
-        raise RuntimeError(f"HTTP {resp.status}")
-    out_path.write_bytes(resp.body())
-    seen.add(filename)
-    return True
-
-
-def get_result_total(page):
-    try:
-        text = page.locator("span.resultTotal").first.text_content() or ""
-    except Exception:
-        text = ""
-    text = text.strip()
-    if not text:
-        return 0, False
-    is_plus = "+" in text
-    digits = re.findall(r"\d+", text)
-    if not digits:
-        return 0, is_plus
-    return int(digits[0]), is_plus
-
-
-
-
-def scroll_to_bottom(page, max_rounds=8, pause=0.6):
-    last_height = page.evaluate("document.body.scrollHeight")
-    for _ in range(max_rounds):
-        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        page.wait_for_timeout(int(pause * 1000))
-        new_height = page.evaluate("document.body.scrollHeight")
-        if new_height == last_height:
-            break
-        last_height = new_height
 
 
 def build_url(city_code: str, dev_code: str, start: int, num: int) -> str:
@@ -99,7 +110,7 @@ def load_progress(path: Path):
     if not path.exists():
         return {}
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
 
@@ -110,9 +121,107 @@ def save_progress(path: Path, data: dict):
     tmp.replace(path)
 
 
+def scroll_to_bottom(page, max_rounds=8, pause_ms=600):
+    try:
+        last_height = page.evaluate("document.body.scrollHeight")
+    except Exception:
+        return
+    for _ in range(max_rounds):
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        page.wait_for_timeout(pause_ms)
+        new_height = page.evaluate("document.body.scrollHeight")
+        if new_height == last_height:
+            break
+        last_height = new_height
+
+
+def wait_for_page_state(page, timeout_ms=30000, poll_ms=500):
+    deadline = time.time() + (timeout_ms / 1000.0)
+    while time.time() < deadline:
+        try:
+            state = page.evaluate("() => window.__PAGE_STATE__ || null")
+        except Exception:
+            state = None
+        if state:
+            return state
+        page.wait_for_timeout(poll_ms)
+    return None
+
+
+
+
+def wait_for_rendered_list(page, timeout_ms=45000, poll_ms=800, stable_rounds=3):
+    """Wait until searchResult.list appears and stabilizes."""
+    deadline = time.time() + (timeout_ms / 1000.0)
+    last_len = None
+    stable = 0
+    while time.time() < deadline:
+        try:
+            data = page.evaluate('''() => {
+                const s = window.__PAGE_STATE__?.info?.searchResult;
+                if (!s) return null;
+                return {
+                    total: s.total || 0,
+                    num: s.num || 0,
+                    start: s.start || 0,
+                    len: Array.isArray(s.list) ? s.list.length : 0
+                };
+            }''')
+        except Exception:
+            data = None
+        if data:
+            total = int(data.get("total") or 0)
+            num = int(data.get("num") or 0)
+            start = int(data.get("start") or 0)
+            length = int(data.get("len") or 0)
+
+            if length > 0:
+                if last_len == length:
+                    stable += 1
+                else:
+                    stable = 1
+                last_len = length
+
+                if num > 0 and length >= num:
+                    return True
+                if stable >= stable_rounds:
+                    return True
+
+                if total > 0 and num > 0:
+                    remaining = max(total - start, 0)
+                    if remaining and length >= min(num, remaining):
+                        return True
+        page.wait_for_timeout(poll_ms)
+    return False
+
+
+
+def start_caffeinate(logger):
+    if shutil.which("caffeinate") is None:
+        logger.warning("caffeinate not found; sleep prevention not enabled")
+        return None
+    try:
+        proc = subprocess.Popen(["caffeinate", "-dimsu"])
+        logger.info("Started caffeinate to prevent sleep (pid=%s)", proc.pid)
+        return proc
+    except Exception as e:
+        logger.warning("Failed to start caffeinate: %s", e)
+        return None
+
+
+def stop_caffeinate(proc, logger):
+    if not proc:
+        return
+    try:
+        proc.terminate()
+        proc.wait(timeout=5)
+        logger.info("Stopped caffeinate")
+    except Exception as e:
+        logger.warning("Failed to stop caffeinate: %s", e)
+
 def setup_logger(log_path: Path):
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("kujiale")
+    logger = logging.getLogger("kujiale_page_state")
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
@@ -129,19 +238,30 @@ def setup_logger(log_path: Path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", default="./downloads/kujiale")
-    parser.add_argument("--num", type=int, default=50, help="每页条数")
+    parser.add_argument("--out", default="./downloads/kujiale/json")
+    parser.add_argument("--num", type=int, default=100, help="每页条数")
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--manual-login", action="store_true")
-    parser.add_argument("--user-data-dir", default="./downloads/kujiale/profile")
+    parser.add_argument("--user-data-dir",
+                        default="./downloads/kujiale/profile")
+    parser.add_argument(
+        "--wasm-file",
+        default="/Users/hummingbird/Develop/anjuke-demo/scripts/optimized.wasm",
+    )
     args = parser.parse_args()
 
     out_root = Path(args.out)
     out_root.mkdir(parents=True, exist_ok=True)
-
-    logger = setup_logger(out_root / "logs" / "kujiale_download.log")
+    logger = setup_logger(out_root / "logs" / "kujiale_page_state.log")
     progress_path = out_root / "progress.json"
     progress = load_progress(progress_path)
+
+    wasm_path = Path(args.wasm_file)
+    if not wasm_path.exists():
+        raise FileNotFoundError(f"optimized.wasm not found: {wasm_path}")
+    store, exports = load_wasm(wasm_path)
+
+    caffeinate_proc = start_caffeinate(logger)
 
     with sync_playwright() as p:
         if args.manual_login:
@@ -153,153 +273,136 @@ def main():
             context = browser.new_context()
 
         page = context.new_page()
-
         if args.manual_login:
             try:
-                page.goto("https://www.kujiale.cn", wait_until="domcontentloaded", timeout=90000)
+                page.goto("https://www.kujiale.cn",
+                          wait_until="domcontentloaded", timeout=90000)
             except Exception as e:
                 logger.warning("Initial login page failed: %s", e)
-                try:
-                    page.goto("about:blank")
-                except Exception:
-                    pass
-            logger.info("Please log in in the opened browser, then press Enter to continue.")
+            logger.info(
+                "Please log in in the opened browser, then press Enter to continue.")
             input()
 
         for city_name, city_code in CITY_CODES.items():
             for dev_name in DEV_NAMES:
+                dev_code = encode_dev_name(dev_name)
                 key = f"{city_name}|{dev_name}"
                 state = progress.get(key, {})
                 if state.get("completed"):
                     logger.info("Skip completed: %s %s", city_name, dev_name)
                     continue
 
-                dev_code = encode_dev_name(dev_name)
-                out_dir = out_root / city_name / dev_name
-                out_dir.mkdir(parents=True, exist_ok=True)
-
-                collected = set()
-                downloaded = set()
-
-                total = None
                 start = int(state.get("start", 0))
-                page_idx = start // args.num + 1
-                empty_streak = 0
 
-                while True:
-                    url = build_url(city_code, dev_code, start, args.num)
+                # First page to fetch total/num
+                first_url = build_url(city_code, dev_code, start, args.num)
+                try:
+                    page.goto(
+                        first_url, wait_until="domcontentloaded", timeout=90000)
+                except Exception as e:
+                    logger.warning("Goto failed: %s (%s)", first_url, e)
+                scroll_to_bottom(page)
+                page_state = wait_for_page_state(page, timeout_ms=30000)
+                wait_for_rendered_list(page, timeout_ms=45000)
+                time.sleep(15)
+                if not page_state:
+                    logger.warning("No __PAGE_STATE__ for %s", first_url)
+                    progress[key] = {"start": start, "completed": True}
+                    save_progress(progress_path, progress)
+                    continue
 
-                    def on_response(resp):
-                        try:
-                            if resp.request.resource_type != "image":
-                                return
-                        except Exception:
-                            return
-                        url = normalize_thumbnail_url(resp.url)
-                        if "fphimage-cos.kujiale.com" not in url:
-                            return
-                        if "imageMogr2/thumbnail" not in url:
-                            return
-                        url = normalize_thumbnail_url(url)
-                        if IMG_RE.search(url):
-                            print(url)
-                            collected.add(url)
+                info = page_state.get("info") or {}
+                search_result = info.get("searchResult") or {}
+                total = int(search_result.get("total") or 0)
+                num = int(search_result.get("num") or args.num)
 
-                    page.on("response", on_response)
+                if total <= 0:
+                    logger.info("No results for %s %s", city_name, dev_name)
+                    progress[key] = {"start": start, "completed": True}
+                    save_progress(progress_path, progress)
+                    continue
+
+                total_pages = (total + num - 1) // num
+                start_page = start // num
+
+                for page_idx in range(start_page, total_pages):
+                    start = page_idx * num
+                    url = build_url(city_code, dev_code, start, num)
                     try:
-                        page.goto(url, wait_until="domcontentloaded", timeout=90000)
+                        page.goto(url, wait_until="domcontentloaded",
+                                  timeout=90000)
                     except Exception as e:
                         logger.warning("Goto failed: %s (%s)", url, e)
-                    # auto scroll to trigger lazy-load and wait until we have enough images
-                    expected = args.num
-                    if total is not None:
-                        expected = min(args.num, max(total - start, 0))
-                    target = expected
-                    last_count = -1
-                    stable_rounds = 0
-                    for _ in range(30):
-                        scroll_to_bottom(page)
-                        if len(collected) >= target and target > 0:
-                            break
-                        if len(collected) == last_count:
-                            stable_rounds += 1
-                        else:
-                            stable_rounds = 0
-                            last_count = len(collected)
-                        if stable_rounds >= 3:
-                            break
-                        page.wait_for_timeout(500)
-                    try:
-                        page.remove_listener("response", on_response)
-                    except Exception:
-                        pass
+                    scroll_to_bottom(page)
+                    page_state = wait_for_page_state(page, timeout_ms=30000)
+                    wait_for_rendered_list(page, timeout_ms=45000)
+                    time.sleep(15)
+                    if not page_state:
+                        logger.warning("No __PAGE_STATE__ for %s", url)
+                        continue
 
-                    if total is None:
-                        total_val, is_plus = get_result_total(page)
-                        if total_val == 0 and not is_plus:
-                            logger.info("No results for %s %s", city_name, dev_name)
-                            progress[key] = {"start": start, "completed": True}
-                            save_progress(progress_path, progress)
-                            break
-                        if is_plus:
-                            total = None
-                        else:
-                            total = total_val
+                    info = page_state.get("info") or {}
+                    search_result = info.get("searchResult") or {}
+                    items = search_result.get("list") or []
+                    if not items:
+                        logger.info("Empty list at %s %s start=%s",
+                                    city_name, dev_name, start)
+                        continue
 
-                    new_urls = list(collected)
-                    collected.clear()
+                    out_dir = out_root / city_name / dev_name
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    out_path = out_dir / f"start_{start}.json"
+                    if out_path.exists():
+                        logger.info("Exists, skip: %s", out_path)
+                        continue
 
-                    if not new_urls:
-                        empty_streak += 1
-                    else:
-                        empty_streak = 0
+                    out_items = []
+                    for item in items:
+                        def decode_field(key):
+                            val = item.get(key) or ""
+                            decoded = decode_image_url(store, exports, val)
+                            decoded = to_992(decoded)
+                            return {
+                                "encoded": val,
+                                "decoded": decoded,
+                            }
 
-                    ok = 0
-                    for img_url in new_urls:
-                        try:
-                            img_url = normalize_thumbnail_url(img_url)
-                            if download_image(img_url, out_dir, downloaded, page.request):
-                                ok += 1
-                        except Exception as e:
-                            logger.warning("Download failed: %s (%s)", img_url, e)
+                        out = dict(item)
+                        out["imageUrlDecoded"] = decode_field("imageUrl")
+                        out["withoutDimensionLineDecoded"] = decode_field(
+                            "withoutDimensionLine")
+                        out["wallCenterLineDecoded"] = decode_field(
+                            "wallCenterLine")
+                        out["insideTheWallDecoded"] = decode_field(
+                            "insideTheWall")
+                        out_items.append(out)
 
-                    if ok < expected and expected > 0:
-                        logger.warning(
-                            "[%s/%s] page %s start=%s downloaded %s/%s",
-                            city_name,
-                            dev_name,
-                            page_idx,
-                            start,
-                            ok,
-                            expected,
-                        )
-                    else:
-                        logger.info(
-                            "[%s/%s] page %s start=%s downloaded=%s empty_streak=%s",
-                            city_name,
-                            dev_name,
-                            page_idx,
-                            start,
-                            ok,
-                            empty_streak,
-                        )
+                    payload = {
+                        "cityName": city_name,
+                        "cityId": city_code,
+                        "developer": dev_name,
+                        "developerCode": dev_code,
+                        "total": total,
+                        "num": num,
+                        "start": start,
+                        "list": out_items,
+                    }
+                    out_path.write_text(json.dumps(
+                        payload, ensure_ascii=False, indent=2))
 
-                    start += args.num
-                    page_idx += 1
+                    logger.info(
+                        "Saved %s items to %s (total=%s)",
+                        len(out_items),
+                        out_path,
+                        total,
+                    )
 
-                    progress[key] = {"start": start, "completed": False}
+                    progress[key] = {
+                        "start": (page_idx + 1) * num, "completed": False}
                     save_progress(progress_path, progress)
 
-                    if total is not None and start >= total:
-                        progress[key] = {"start": start, "completed": True}
-                        save_progress(progress_path, progress)
-                        break
-
-                    if empty_streak >= 2:
-                        logger.info("Stop due to empty pages for %s %s", city_name, dev_name)
-                        progress[key] = {"start": start, "completed": True}
-                        save_progress(progress_path, progress)
-                        break
+                progress[key] = {"start": total, "completed": True}
+                save_progress(progress_path, progress)
 
         context.close()
 

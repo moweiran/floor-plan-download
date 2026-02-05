@@ -13,6 +13,11 @@ node /Users/hummingbird/Develop/anjuke-demo/scripts/decode_image_url.js \
   node /Users/hummingbird/Develop/anjuke-demo/scripts/decode_image_url.js \
   "uU2uKMuKMuKKuK9uvKupqupquUTuKKuU2uUWuKpuUduUmuUquptuUtuKUuK9upFuUAuKyuUcuUWuUduKuuUqupFuUtuKUuKpupquUTuKKuU2upqup2upTup2upcupTuvvupTupWupqupTuUSuUSuUSupcuUSuUSuUqupcup2upmuUFuvUuvUupmuvUupFuUcuKKuUm"
 
+
+https://www.kujiale.cn/huxing/result/36-534e-6da6-0-0?num=100&start=4999
+https://www.kujiale.cn/huxing/result/36-534e-0-0?num=100&start=4999
+https://www.kujiale.cn/huxing/result/36-56ed-0-0?num=100&start=4999
+
 先帮我由decode_image_url.js的js代码分析后，转为python写法，同时测试
 
 
@@ -59,3 +64,13 @@ node /Users/hummingbird/Develop/anjuke-demo/scripts/decode_image_url.js \
         解析出imageUrl,withoutDimensionLine,wallCenterLine,insideTheWall
         然后生成新的json文件，按城市，开发商，分页来整理json文件
         其他的分页和跳转下一页保持原来的方式，不用再监听response中的image url了
+
+
+```
+python3 /Users/hummingbird/Develop/anjuke-demo/scripts/kujiale_page_state_export.py \
+  --out "./downloads/kujiale/json" \
+  --num 100
+```
+
+-可以再加一个机制，需要等整个页面都渲染完后，再下一页吗？加一个这样的等待机制
+-电脑休眠后，运行中的拉取代码会中断吗？拉取数据期间，不要让电脑休眠，加上这样的逻辑机制
