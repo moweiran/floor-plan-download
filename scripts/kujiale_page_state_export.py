@@ -317,16 +317,19 @@ def main():
                 num = int(search_result.get("num") or args.num)
 
                 if total <= 0:
-                    logger.info("No results for %s %s", city_name, dev_name)
-                    progress[key] = {"start": start, "completed": True}
-                    save_progress(progress_path, progress)
-                    continue
+                    logger.info("Total is 0 for %s %s; will continue until empty list",
+                                city_name, dev_name)
 
-                total_pages = (total + num - 1) // num
                 start_page = start // num
+                page_idx = start_page
 
-                for page_idx in range(start_page, total_pages):
+                empty_streak = int(state.get("empty_streak", 0))
+
+                while True:
                     start = page_idx * num
+                    if total > 0 and start >= total:
+                        break
+
                     url = build_url(city_code, dev_code, start, num)
                     try:
                         page.goto(url, wait_until="domcontentloaded",
@@ -339,21 +342,38 @@ def main():
                     time.sleep(15)
                     if not page_state:
                         logger.warning("No __PAGE_STATE__ for %s", url)
+                        page_idx += 1
                         continue
 
                     info = page_state.get("info") or {}
                     search_result = info.get("searchResult") or {}
                     items = search_result.get("list") or []
                     if not items:
-                        logger.info("Empty list at %s %s start=%s",
-                                    city_name, dev_name, start)
+                        empty_streak += 1
+                        logger.info("Empty list at %s %s start=%s (streak=%s)",
+                                    city_name, dev_name, start, empty_streak)
+                        progress[key] = {
+                            "start": start,
+                            "completed": False,
+                            "empty_streak": empty_streak,
+                        }
+                        save_progress(progress_path, progress)
+                        if empty_streak >= 1:
+                            logger.info("Empty list 2 pages in a row; stop this condition")
+                            progress[key] = {"start": start, "completed": True}
+                            save_progress(progress_path, progress)
+                            break
+                        page_idx += 1
                         continue
+
+                    empty_streak = 0
 
                     out_dir = out_root / city_name / dev_name
                     out_dir.mkdir(parents=True, exist_ok=True)
                     out_path = out_dir / f"start_{start}.json"
                     if out_path.exists():
                         logger.info("Exists, skip: %s", out_path)
+                        page_idx += 1
                         continue
 
                     out_items = []
@@ -401,7 +421,9 @@ def main():
                         "start": (page_idx + 1) * num, "completed": False}
                     save_progress(progress_path, progress)
 
-                progress[key] = {"start": total, "completed": True}
+                    page_idx += 1
+
+                progress[key] = {"start": page_idx * num, "completed": True, "empty_streak": 0}
                 save_progress(progress_path, progress)
 
         context.close()
