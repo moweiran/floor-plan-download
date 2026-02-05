@@ -65,3 +65,38 @@ print(decode_dev_code('4e07-79d1'))  # 输出: 华润
 发现的问题是
 1.每页有50条数据，但其实还没下载50条，就下一页了，这样是有问题的
 2.下载的图片分辨率不是496x496的，而应该是imageMogr2/thumbnail/992x992!
+
+
+解码数据
+```
+{
+                        "nationId": 0,
+                        "nationName": "中国",
+                        "stateId": 19,
+                        "stateName": "广东省",
+                        "cityId": 291,
+                        "cityName": "深圳市",
+                        "obsCommunityId": "3FO4KFKHILQR",
+                        "commName": "信城缙华府",
+                        "obsPlanId": "3FO3L9I77WP0",
+                        "obsDesignId": "3FO3L9I77WP0",
+                        "isBim": true,
+                        "name": "信城缙华府4室2厅0厨4卫",
+                        "imageUrl": "uU2uKMuKMuKKuK9uvKupqupquKIuU2uKMuUSuUFuKUuK9uK9upFuUAuKyuUcuUWuUduKuuUqupFuUtuKUuKpupquUTuKKuUWuKpuUmuKvuUquKzupquKKuKNuKUuUFupquKuupqupWuvduvcupWuvmuvUuvFuvpuvpuUNuvAupTupquvvuUTupAupcuvpuUtuUFuUduptuvpuvpupWuUFuptupcuUquvvuvpuptuUduvpuvUuvUuptuUFupWuUFuUFupmupAuvuupcuUFuUtuUFupmupFuUcuKKuUm",
+                        "buildArea": "76.73m²",
+                        "useArea": "65.34m²",
+                        "specsInfo": "4室2厅0厨4卫",
+                        "publicType": "推荐",
+                        "withoutDimensionLine": "uU2uKMuKMuKKuK9uvKupqupquUTuKKuU2uUWuKpuUduUmuUquptuUtuKUuK9upFuUAuKyuUcuUWuUduKuuUqupFuUtuKUuKpupquUTuKKuU2upqup2upTup2upcupTuvvupTupWupqupTuUSuUSuUSupcuUSuUSuUqupcup2upmuUFuvUuvUupmuvUupFuUcuKKuUm",
+                        "wallCenterLine": "uU2uKMuKMuKKuK9uvKupqupquUTuKKuU2uUWuKpuUduUmuUquptuUtuKUuK9upFuUAuKyuUcuUWuUduKuuUqupFuUtuKUuKpupquUTuKKuU2upqup2upTup2upcupTuvvupTupWupqupcup2uUTuUFupAuUquvuuUduvuuUtuvUuUtupAupcuUtuvuupFuUcuKKuUm",
+                        "insideTheWall": "uU2uKMuKMuKKuK9uvKupqupquUTuKKuU2uUWuKpuUduUmuUquptuUtuKUuK9upFuUAuKyuUcuUWuUduKuuUqupFuUtuKUuKpupquUTuKKuU2upqup2upTup2upcupTuvvupTupWupquvUuvvupTuUSupcuvpupmuUSupAuvUuUFuvvuUSupWuUqupcupFuUcuKKuUm",
+                        "updateTime": 1743590620000
+                    }
+```
+
+需要解码
+前端的js代码如下
+帮我解析出imageUrl字段的内容
+参考：
+"imageUrl": "uU2uKMuKMuKKuK9uvKupqupquKIuU2uKMuUSuUFuKUuK9uK9upFuUAuKyuUcuUWuUduKuuUqupFuUtuKUuKpupquUTuKKuUWuKpuUmuKvuUquKzupquKKuKNuKUuUFupquKuupqupWuvduvcupWuvmuvUuvFuvpuvpuUNuvAupTupquvvuUTupAupcuvpuUtuUFuUduptuvpuvpupWuUFuptupcuUquvvuvpuptuUduvpuvUuvUuptuUFupWuUFuUFupmupAuvuupcuUFuUtuUFupmupFuUcuKKuUm",
+结果为：https://fphimage-cos.kujiale.com/fph/20240618/844d889de35e8897.jpg?imageMogr2/thumbnail/992x992!这样的格式

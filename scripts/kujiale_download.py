@@ -75,6 +75,19 @@ def get_result_total(page):
     return int(digits[0]), is_plus
 
 
+
+
+def scroll_to_bottom(page, max_rounds=8, pause=0.6):
+    last_height = page.evaluate("document.body.scrollHeight")
+    for _ in range(max_rounds):
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        page.wait_for_timeout(int(pause * 1000))
+        new_height = page.evaluate("document.body.scrollHeight")
+        if new_height == last_height:
+            break
+        last_height = new_height
+
+
 def build_url(city_code: str, dev_code: str, start: int, num: int) -> str:
     return (
         f"https://www.kujiale.cn/huxing/result/{city_code}-{dev_code}-0-0"
@@ -197,12 +210,16 @@ def main():
                         page.goto(url, wait_until="domcontentloaded", timeout=90000)
                     except Exception as e:
                         logger.warning("Goto failed: %s (%s)", url, e)
-                    # wait until we have enough images for this page (or timeout)
-                    target = args.num
+                    # auto scroll to trigger lazy-load and wait until we have enough images
+                    expected = args.num
+                    if total is not None:
+                        expected = min(args.num, max(total - start, 0))
+                    target = expected
                     last_count = -1
                     stable_rounds = 0
-                    for _ in range(20):
-                        if len(collected) >= target:
+                    for _ in range(30):
+                        scroll_to_bottom(page)
+                        if len(collected) >= target and target > 0:
                             break
                         if len(collected) == last_count:
                             stable_rounds += 1
@@ -246,15 +263,26 @@ def main():
                         except Exception as e:
                             logger.warning("Download failed: %s (%s)", img_url, e)
 
-                    logger.info(
-                        "[%s/%s] page %s start=%s downloaded=%s empty_streak=%s",
-                        city_name,
-                        dev_name,
-                        page_idx,
-                        start,
-                        ok,
-                        empty_streak,
-                    )
+                    if ok < expected and expected > 0:
+                        logger.warning(
+                            "[%s/%s] page %s start=%s downloaded %s/%s",
+                            city_name,
+                            dev_name,
+                            page_idx,
+                            start,
+                            ok,
+                            expected,
+                        )
+                    else:
+                        logger.info(
+                            "[%s/%s] page %s start=%s downloaded=%s empty_streak=%s",
+                            city_name,
+                            dev_name,
+                            page_idx,
+                            start,
+                            ok,
+                            empty_streak,
+                        )
 
                     start += args.num
                     page_idx += 1
