@@ -77,17 +77,40 @@ def instantiate_wasm(wasm_bytes: bytes):
     return store, exports
 
 
+def list_exports(exports):
+    return sorted(list(exports))
+
+
+
+
+def _as_new_string(store, exports, s: str) -> int:
+    mem = exports["memory"]
+    new = exports["__new"]
+    # AssemblyScript string id is 1
+    ptr = new(store, len(s) * 2, 1)
+    data = s.encode("utf-16le")
+    mem.write(store, ptr, data)
+    return ptr
+
+
+def _as_get_string(store, exports, ptr: int) -> str:
+    mem = exports["memory"]
+    size_bytes = int.from_bytes(mem.read(store, ptr - 4, 4), "little")
+    data = mem.read(store, ptr, size_bytes)
+    return data.decode("utf-16le")
+
+
 def decode_with_wasm(store, exports, encoded: str) -> str:
     if not encoded:
         return ""
     if re.search(r"\.jpg|\.png|\.webp", encoded, re.I):
         return encoded
+    if "decodeFromString" not in exports or "__new" not in exports or "memory" not in exports:
+        raise KeyError(f"Missing exports. Available: {list_exports(exports)}")
     decode_from_string = exports["decodeFromString"]
-    new_string = exports["__newString"]
-    get_string = exports["__getString"]
-    ptr = new_string(store, encoded)
-    out_ptr = decode_from_string(store, ptr)
-    return get_string(store, out_ptr)
+    in_ptr = _as_new_string(store, exports, encoded)
+    out_ptr = decode_from_string(store, in_ptr)
+    return _as_get_string(store, exports, out_ptr)
 
 
 def to_992(url: str) -> str:
@@ -107,6 +130,7 @@ def main():
     parser.add_argument("--raw", action="store_true", help="do not force 992x992")
     parser.add_argument("--wasm-file", help="local wasm file path to avoid network fetch")
     parser.add_argument("--no-verify-ssl", action="store_true", help="disable SSL verification when fetching wasm")
+    parser.add_argument("--list-exports", action="store_true", help="print wasm exports and exit")
     args = parser.parse_args()
 
     if not args.encoded and not args.file:
@@ -118,6 +142,10 @@ def main():
     else:
         wasm_bytes = fetch_wasm(WASM_URL, verify_ssl=not args.no_verify_ssl)
     store, exports = instantiate_wasm(wasm_bytes)
+
+    if args.list_exports:
+        print("\n".join(list_exports(exports)))
+        return
 
     if args.file:
         data = json.loads(Path(args.file).read_text(encoding="utf-8"))

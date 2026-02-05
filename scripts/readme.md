@@ -100,3 +100,8 @@ print(decode_dev_code('4e07-79d1'))  # 输出: 华润
 参考：
 "imageUrl": "uU2uKMuKMuKKuK9uvKupqupquKIuU2uKMuUSuUFuKUuK9uK9upFuUAuKyuUcuUWuUduKuuUqupFuUtuKUuKpupquUTuKKuUWuKpuUmuKvuUquKzupquKKuKNuKUuUFupquKuupqupWuvduvcupWuvmuvUuvFuvpuvpuUNuvAupTupquvvuUTupAupcuvpuUtuUFuUduptuvpuvpupWuUFuptupcuUquvvuvpuptuUduvpuvUuvUuptuUFupWuUFuUFupmupAuvuupcuUFuUtuUFupmupFuUcuKKuUm",
 结果为：https://fphimage-cos.kujiale.com/fph/20240618/844d889de35e8897.jpg?imageMogr2/thumbnail/992x992!这样的格式
+
+python3 /Users/hummingbird/Develop/anjuke-demo/scripts/decode_image_url.py \
+  --wasm-file /Users/hummingbird/Develop/anjuke-demo/scripts/optimized.wasm \
+  --list-exports
+  "uU2uKMuKMuKKuK9uvKupqupquKIuU2uKMuUSuUFuKUuK9uK9upFuUAuKyuUcuUWuUduKuuUqupFuUtuKUuKpupquUTuKKuUWuKpuUmuKvuUquKzupquKKuKNuKUuUFupquKuupqupWuvduvcupWuvmuvUuvFuvpuvpuUNuvAupTupquvvuUTupAupcuvpuUtuUFuUduptuvpuvpupWuUFuptupcuUquvvuvpuptuUduvpuvUuvUuptuUFupWuUFuUFupmupAuvuupcuUFuUtuUFupmupFuUcuKKuUm"

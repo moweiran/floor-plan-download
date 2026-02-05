@@ -1,21 +1,44 @@
 #!/usr/bin/env node
 const fs = require('fs');
+const path = require('path');
 
-const wasmUrl = 'https://qhstaticssl.kujiale.com/application/wasm/optimized.wasm';
+const wasmPath = path.join(__dirname, 'optimized.wasm');
 
-async function loadWasm() {
-  const res = await fetch(wasmUrl);
-  if (!res.ok) throw new Error(`Failed to fetch wasm: ${res.status}`);
-  const bytes = await res.arrayBuffer();
-  const { instance } = await WebAssembly.instantiate(bytes, {});
+function loadWasmSync() {
+  if (!fs.existsSync(wasmPath)) {
+    throw new Error(`optimized.wasm not found at ${wasmPath}`);
+  }
+  const bytes = fs.readFileSync(wasmPath);
+  const instance = new WebAssembly.Instance(new WebAssembly.Module(bytes), {
+    env: {
+      abort() {},
+    },
+  });
   return instance.exports;
+}
+
+function writeString(exports, str) {
+  const { memory, __new } = exports;
+  const buf = Buffer.from(str, 'utf16le');
+  const ptr = __new(buf.length, 1);
+  new Uint8Array(memory.buffer, ptr, buf.length).set(buf);
+  return ptr;
+}
+
+function readString(exports, ptr) {
+  const { memory } = exports;
+  const size = new DataView(memory.buffer).getUint32(ptr - 4, true);
+  const bytes = new Uint8Array(memory.buffer, ptr, size);
+  return Buffer.from(bytes).toString('utf16le');
 }
 
 function decodeWithWasm(exports, encoded) {
   if (!encoded) return '';
   if (/\.jpg|\.png|\.webp/i.test(encoded)) return encoded;
-  const { decodeFromString, __newString, __getString } = exports;
-  return __getString(decodeFromString(__newString(encoded)));
+  const { decodeFromString } = exports;
+  const inPtr = writeString(exports, encoded);
+  const outPtr = decodeFromString(inPtr);
+  return readString(exports, outPtr);
 }
 
 function to992(url) {
@@ -29,31 +52,21 @@ function to992(url) {
   return url;
 }
 
-async function main() {
+function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) {
-    console.error('Usage: node decode_image_url.js <encoded> | --file <jsonfile>');
+    console.error('Usage: node decode_image_url.js <encoded>');
     process.exit(1);
   }
-
-  const exports = await loadWasm();
-
-  if (args[0] === '--file') {
-    const file = args[1];
-    const raw = fs.readFileSync(file, 'utf8');
-    const data = JSON.parse(raw);
-    const encoded = data.imageUrl;
-    const decoded = decodeWithWasm(exports, encoded);
-    console.log(to992(decoded));
-    return;
-  }
-
+  const exports = loadWasmSync();
   const encoded = args.join(' ');
   const decoded = decodeWithWasm(exports, encoded);
   console.log(to992(decoded));
 }
 
-main().catch(err => {
+try {
+  main();
+} catch (err) {
   console.error(err);
   process.exit(1);
-});
+}
