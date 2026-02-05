@@ -1,0 +1,7 @@
+2026/02/05-09:10:29.522 23809 Reusing MANIFEST /Users/hummingbird/Develop/anjuke-demo/proxy-scraper/downloads/kujiale/profile/Default/Local Storage/leveldb/MANIFEST-000001
+2026/02/05-09:10:29.524 23809 Recovering log #18
+2026/02/05-09:10:29.525 23809 Level-0 table #21: started
+2026/02/05-09:10:29.528 23809 Level-0 table #21: 24610 bytes OK
+2026/02/05-09:10:29.530 23809 Delete type=0 #18
+2026/02/05-09:11:01.134 2380c Level-0 table #24: started
+2026/02/05-09:11:01.155 2380c Level-0 table #24: 25278 bytes OK

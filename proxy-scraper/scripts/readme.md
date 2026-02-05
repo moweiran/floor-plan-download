@@ -1,0 +1,1 @@
+python3 scripts/kujiale_download.py --url "https://www.kujiale.cn/huxing/result/291-9e3f-8363-6e90-20-5c1a-4e91-0-0?area_level=3&precise=0" --out "./downloads/kujiale" --media-only --debug-log --manual-login
