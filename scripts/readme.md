@@ -1,5 +1,13 @@
 python3 scripts/kujiale_download.py --url "https://www.kujiale.cn/huxing/result/291-9e3f-8363-6e90-20-5c1a-4e91-0-0?area_level=3&precise=0" --out "./downloads/kujiale" --media-only --debug-log --manual-login
 
+``
+python3 /Users/hummingbird/Develop/anjuke-demo/scripts/kujiale_download.py \
+  --out "./downloads/kujiale" \
+  --num 50 \
+  --manual-login
+```
+
+
 1. 库家乐提供了一个全国的区域json数据
 2. 根据不同的区域ID，打开对应的页面
 3. 输入地产商的名字
