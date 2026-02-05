@@ -174,6 +174,7 @@ def main():
                         except Exception:
                             return
                         if IMG_RE.search(req.url):
+                            print(req.url)
                             collected.add(req.url)
 
                     page.on("request", on_request)
@@ -182,7 +183,10 @@ def main():
                     except Exception as e:
                         logger.warning("Goto failed: %s (%s)", url, e)
                     time.sleep(2.5)
-                    page.off("request", on_request)
+                    try:
+                        page.remove_listener("request", on_request)
+                    except Exception:
+                        pass
 
                     if total is None:
                         total_val, is_plus = get_result_total(page)
