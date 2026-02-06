@@ -101,9 +101,9 @@ def encode_dev_name(name: str) -> str:
     return f"{hex_str[:4]}-{hex_str[4:]}"
 
 
-def build_url(city_code: str, dev_code: str, start: int, num: int) -> str:
+def build_url(city_code: str, dev_code: str, room: int, start: int, num: int) -> str:
     return (
-        f"https://www.kujiale.cn/huxing/result/{city_code}-{dev_code}-0-0"
+        f"https://www.kujiale.cn/huxing/result/{city_code}-{dev_code}-{room}-0"
         f"?num={num}&start={start}"
     )
 
@@ -241,7 +241,7 @@ def setup_logger(log_path: Path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="./downloads/kujiale/json")
-    parser.add_argument("--num", type=int, default=100, help="每页条数")
+    parser.add_argument("--num", type=int, default=200, help="每页条数")
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--manual-login", action="store_true")
     parser.add_argument("--user-data-dir",
@@ -287,146 +287,148 @@ def main():
 
         for city_name, city_code in CITY_CODES.items():
             for dev_name in DEV_NAMES:
-                dev_code = encode_dev_name(dev_name)
-                key = f"{city_name}|{dev_name}"
-                state = progress.get(key, {})
-                if state.get("completed"):
-                    logger.info("Skip completed: %s %s", city_name, dev_name)
-                    continue
+                for room in ROOMS:
+                    dev_code = encode_dev_name(dev_name)
+                    key = f"{city_name}|{dev_name}|{room}"
+                    state = progress.get(key, {})
+                    if state.get("completed"):
+                        logger.info("Skip completed: %s %s room=%s", city_name, dev_name, room)
+                        continue
 
-                start = int(state.get("start", 0))
+                    start = int(state.get("start", 0))
 
-                # First page to fetch total/num
-                first_url = build_url(city_code, dev_code, start, args.num)
-                try:
-                    page.goto(
-                        first_url, wait_until="domcontentloaded", timeout=90000)
-                except Exception as e:
-                    logger.warning("Goto failed: %s (%s)", first_url, e)
-                scroll_to_bottom(page)
-                page_state = wait_for_page_state(page, timeout_ms=30000)
-                wait_for_rendered_list(page, timeout_ms=45000)
-                time.sleep(15)
-                if not page_state:
-                    logger.warning("No __PAGE_STATE__ for %s", first_url)
-                    progress[key] = {"start": start, "completed": True}
-                    save_progress(progress_path, progress)
-                    continue
-
-                info = page_state.get("info") or {}
-                search_result = info.get("searchResult") or {}
-                total = int(search_result.get("total") or 0)
-                num = int(search_result.get("num") or args.num)
-
-                if total <= 0:
-                    logger.info("Total is 0 for %s %s; will continue until empty list",
-                                city_name, dev_name)
-
-                start_page = start // num
-                page_idx = start_page
-
-                empty_streak = int(state.get("empty_streak", 0))
-
-                while True:
-                    start = page_idx * num
-                    if total > 0 and start >= total:
-                        break
-
-                    url = build_url(city_code, dev_code, start, num)
+                    # First page to fetch total/num
+                    first_url = build_url(city_code, dev_code, room, start, args.num)
                     try:
-                        page.goto(url, wait_until="domcontentloaded",
-                                  timeout=90000)
+                        page.goto(
+                            first_url, wait_until="domcontentloaded", timeout=90000)
                     except Exception as e:
-                        logger.warning("Goto failed: %s (%s)", url, e)
+                        logger.warning("Goto failed: %s (%s)", first_url, e)
                     scroll_to_bottom(page)
                     page_state = wait_for_page_state(page, timeout_ms=30000)
                     wait_for_rendered_list(page, timeout_ms=45000)
-                    time.sleep(15)
+                    time.sleep(9)
                     if not page_state:
-                        logger.warning("No __PAGE_STATE__ for %s", url)
-                        page_idx += 1
+                        logger.warning("No __PAGE_STATE__ for %s", first_url)
+                        progress[key] = {"start": start, "completed": True}
+                        save_progress(progress_path, progress)
                         continue
 
                     info = page_state.get("info") or {}
                     search_result = info.get("searchResult") or {}
-                    items = search_result.get("list") or []
-                    if not items:
-                        empty_streak += 1
-                        logger.info("Empty list at %s %s start=%s (streak=%s)",
-                                    city_name, dev_name, start, empty_streak)
-                        progress[key] = {
-                            "start": start,
-                            "completed": False,
-                            "empty_streak": empty_streak,
-                        }
-                        save_progress(progress_path, progress)
-                        if empty_streak >= 1:
-                            logger.info("Empty list 2 pages in a row; stop this condition")
-                            progress[key] = {"start": start, "completed": True}
-                            save_progress(progress_path, progress)
+                    total = int(search_result.get("total") or 0)
+                    num = int(search_result.get("num") or args.num)
+
+                    if total <= 0:
+                        logger.info("Total is 0 for %s %s room=%s; will continue until empty list",
+                                    city_name, dev_name, room)
+
+                    start_page = start // num
+                    page_idx = start_page
+
+                    empty_streak = int(state.get("empty_streak", 0))
+
+                    while True:
+                        start = page_idx * num
+                        if total > 0 and start >= total:
                             break
-                        page_idx += 1
-                        continue
 
-                    empty_streak = 0
+                        url = build_url(city_code, dev_code, room, start, num)
+                        try:
+                            page.goto(url, wait_until="domcontentloaded",
+                                      timeout=90000)
+                        except Exception as e:
+                            logger.warning("Goto failed: %s (%s)", url, e)
+                        scroll_to_bottom(page)
+                        page_state = wait_for_page_state(page, timeout_ms=30000)
+                        wait_for_rendered_list(page, timeout_ms=45000)
+                        time.sleep(9)
+                        if not page_state:
+                            logger.warning("No __PAGE_STATE__ for %s", url)
+                            page_idx += 1
+                            continue
 
-                    out_dir = out_root / city_name / dev_name
-                    out_dir.mkdir(parents=True, exist_ok=True)
-                    out_path = out_dir / f"start_{start}.json"
-                    if out_path.exists():
-                        logger.info("Exists, skip: %s", out_path)
-                        page_idx += 1
-                        continue
-
-                    out_items = []
-                    for item in items:
-                        def decode_field(key):
-                            val = item.get(key) or ""
-                            decoded = decode_image_url(store, exports, val)
-                            decoded = to_992(decoded)
-                            return {
-                                "encoded": val,
-                                "decoded": decoded,
+                        info = page_state.get("info") or {}
+                        search_result = info.get("searchResult") or {}
+                        items = search_result.get("list") or []
+                        if not items:
+                            empty_streak += 1
+                            logger.info("Empty list at %s %s room=%s start=%s (streak=%s)",
+                                        city_name, dev_name, room, start, empty_streak)
+                            progress[key] = {
+                                "start": start,
+                                "completed": False,
+                                "empty_streak": empty_streak,
                             }
+                            save_progress(progress_path, progress)
+                            if empty_streak >= 1:
+                                logger.info("Empty list 2 pages in a row; stop this condition")
+                                progress[key] = {"start": start, "completed": True}
+                                save_progress(progress_path, progress)
+                                break
+                            page_idx += 1
+                            continue
 
-                        out = dict(item)
-                        out["imageUrlDecoded"] = decode_field("imageUrl")
-                        out["withoutDimensionLineDecoded"] = decode_field(
-                            "withoutDimensionLine")
-                        out["wallCenterLineDecoded"] = decode_field(
-                            "wallCenterLine")
-                        out["insideTheWallDecoded"] = decode_field(
-                            "insideTheWall")
-                        out_items.append(out)
+                        empty_streak = 0
 
-                    payload = {
-                        "cityName": city_name,
-                        "cityId": city_code,
-                        "developer": dev_name,
-                        "developerCode": dev_code,
-                        "total": total,
-                        "num": num,
-                        "start": start,
-                        "list": out_items,
-                    }
-                    out_path.write_text(json.dumps(
-                        payload, ensure_ascii=False, indent=2))
+                        out_dir = out_root / city_name / dev_name / f"{room}居"
+                        out_dir.mkdir(parents=True, exist_ok=True)
+                        out_path = out_dir / f"start_{start}.json"
+                        if out_path.exists():
+                            logger.info("Exists, skip: %s", out_path)
+                            page_idx += 1
+                            continue
 
-                    logger.info(
-                        "Saved %s items to %s (total=%s)",
-                        len(out_items),
-                        out_path,
-                        total,
-                    )
+                        out_items = []
+                        for item in items:
+                            def decode_field(key):
+                                val = item.get(key) or ""
+                                decoded = decode_image_url(store, exports, val)
+                                decoded = to_992(decoded)
+                                return {
+                                    "encoded": val,
+                                    "decoded": decoded,
+                                }
 
-                    progress[key] = {
-                        "start": (page_idx + 1) * num, "completed": False}
+                            out = dict(item)
+                            out["imageUrlDecoded"] = decode_field("imageUrl")
+                            out["withoutDimensionLineDecoded"] = decode_field(
+                                "withoutDimensionLine")
+                            out["wallCenterLineDecoded"] = decode_field(
+                                "wallCenterLine")
+                            out["insideTheWallDecoded"] = decode_field(
+                                "insideTheWall")
+                            out_items.append(out)
+
+                        payload = {
+                            "cityName": city_name,
+                            "cityId": city_code,
+                            "developer": dev_name,
+                            "developerCode": dev_code,
+                            "room": room,
+                            "total": total,
+                            "num": num,
+                            "start": start,
+                            "list": out_items,
+                        }
+                        out_path.write_text(json.dumps(
+                            payload, ensure_ascii=False, indent=2))
+
+                        logger.info(
+                            "Saved %s items to %s (total=%s)",
+                            len(out_items),
+                            out_path,
+                            total,
+                        )
+
+                        progress[key] = {
+                            "start": (page_idx + 1) * num, "completed": False}
+                        save_progress(progress_path, progress)
+
+                        page_idx += 1
+
+                    progress[key] = {"start": page_idx * num, "completed": True, "empty_streak": 0}
                     save_progress(progress_path, progress)
-
-                    page_idx += 1
-
-                progress[key] = {"start": page_idx * num, "completed": True, "empty_streak": 0}
-                save_progress(progress_path, progress)
 
         context.close()
 

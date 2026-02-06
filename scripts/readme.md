@@ -133,3 +133,20 @@ python3 /Users/hummingbird/Develop/anjuke-demo/scripts/decode_image_url.py \
                                 "display": true,
                                 "data": 282
                             }
+
+
+继续分析，根据附件的代码，我需要加一个ROOMS，按居室来搜索
+- 保持原来的代码基本不变
+- 加入ROOMS条件，[1,2,3,4,5]，分别表示一居，二居，三居，四居，五居以上
+- 分析查询条件https://www.kujiale.cn/huxing/result/{city_code}-{dev_code}-0-0,其中
+https://www.kujiale.cn/huxing/result/{city_code}-{dev_code}-1-0表示一居
+https://www.kujiale.cn/huxing/result/{city_code}-{dev_code}-2-0表示二居
+- 下载的文件夹加一个按居室来
+- json数据也要加一个居室的value值
+- 保持其他的业务逻辑不变
+- 保持其他的业务逻辑不变
+- 保持其他的业务逻辑不变
+
+python3 /Users/hummingbird/Develop/anjuke-demo/scripts/kujiale_page_state_export.py \
+  --out "./downloads/kujiale/json" \
+  --num 200
