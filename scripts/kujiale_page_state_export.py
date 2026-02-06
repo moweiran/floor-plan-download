@@ -94,11 +94,12 @@ def to_992(url: str) -> str:
 
 
 def encode_dev_name(name: str) -> str:
-    if len(name) != 2:
-        raise ValueError("仅支持2个汉字")
+    if not name:
+        raise ValueError("开发商名称不能为空")
     utf16_bytes = name.encode("utf-16be")
     hex_str = utf16_bytes.hex()
-    return f"{hex_str[:4]}-{hex_str[4:]}"
+    parts = [hex_str[i:i+4] for i in range(0, len(hex_str), 4)]
+    return "-".join(parts)
 
 
 def build_url(city_code: str, dev_code: str, room: int, start: int, num: int) -> str:
