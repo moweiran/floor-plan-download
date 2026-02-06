@@ -20,6 +20,8 @@ CITY_CODES = {
 
 DEV_NAMES = ["华润", "中海", "万科"]
 
+ROOMS = [1,2,3,4,5]
+
 
 # --- decode helpers (from decode_image_url.py) ---
 

@@ -105,3 +105,31 @@ python3 /Users/hummingbird/Develop/anjuke-demo/scripts/decode_image_url.py \
   --wasm-file /Users/hummingbird/Develop/anjuke-demo/scripts/optimized.wasm \
   --list-exports
   "uU2uKMuKMuKKuK9uvKupqupquKIuU2uKMuUSuUFuKUuK9uK9upFuUAuKyuUcuUWuUduKuuUqupFuUtuKUuKpupquUTuKKuUWuKpuUmuKvuUquKzupquKKuKNuKUuUFupquKuupqupWuvduvcupWuvmuvUuvFuvpuvpuUNuvAupTupquvvuUTupAupcuvpuUtuUFuUduptuvpuvpupWuUFuptupcuUquvvuvpuptuUduvpuvUuvUuptuUFupWuUFuUFupmupAuvuupcuUFuUtuUFupmupFuUcuKKuUm"
+
+
+  {
+                                "content": "一居",
+                                "value": "1",
+                                "display": true,
+                                "data": 614
+                            }, {
+                                "content": "二居",
+                                "value": "2",
+                                "display": true,
+                                "data": 2563
+                            }, {
+                                "content": "三居",
+                                "value": "3",
+                                "display": true,
+                                "data": 3489
+                            }, {
+                                "content": "四居",
+                                "value": "4",
+                                "display": true,
+                                "data": 1286
+                            }, {
+                                "content": "五居及以上",
+                                "value": "5",
+                                "display": true,
+                                "data": 282
+                            }
