@@ -150,3 +150,15 @@ https://www.kujiale.cn/huxing/result/{city_code}-{dev_code}-2-0表示二居
 python3 /Users/hummingbird/Develop/anjuke-demo/scripts/kujiale_page_state_export.py \
   --out "./downloads/kujiale/json" \
   --num 200
+
+
+我已经在本地docker中部署了一个postgresql数据库
+访问的地址为：localhost
+端口号：5423
+
+需要将json数据导入到数据库中
+需求
+- 数据格式可以通过读取json文件提取，然后创建数据库
+
+python3 /Users/hummingbird/Develop/anjuke-demo/scripts/import_kujiale_json.py \
+  --host 127.0.0.1 --port 5432 --user postgres --password fams --db chaodapei
