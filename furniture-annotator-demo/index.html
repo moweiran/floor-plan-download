@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>户型图家具标注 Demo</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">2D 户型图 | 家具可选可替换</p>
+          <h1>家具标注与替换 Demo</h1>
+          <p class="sub">
+            点击图片中的家具进行高亮并弹出下拉列表，从候选项里替换。
+          </p>
+        </div>
+        <div class="legend">
+          <div><span class="dot sofa"></span> 沙发</div>
+          <div><span class="dot bed"></span> 床</div>
+          <div><span class="dot table"></span> 餐桌</div>
+          <div><span class="dot chair"></span> 椅子</div>
+        </div>
+      </header>
+
+      <main class="stage">
+        <div class="image-wrap" id="imageWrap">
+          <div class="mode-toggle">
+            <button class="mode-btn active" data-mode="svg">SVG 户型</button>
+            <button class="mode-btn" data-mode="raster">真实图片</button>
+          </div>
+          <div class="auto-bar">
+            <label class="auto-toggle">
+              <input type="checkbox" id="autoMode" />
+              半自动取轮廓
+            </label>
+            <label>
+              家具类型
+              <select id="autoType">
+                <option value="sofa">沙发</option>
+                <option value="bed">床</option>
+                <option value="table">桌</option>
+                <option value="chair">椅</option>
+                <option value="tv">电视柜</option>
+                <option value="desk">书桌</option>
+              </select>
+            </label>
+            <label>
+              名称
+              <input id="autoName" type="text" placeholder="例如：单人床" />
+            </label>
+            <label>
+              容差
+              <input id="autoTolerance" type="range" min="10" max="80" value="35" />
+            </label>
+          </div>
+          <img id="floorplan" alt="户型图" />
+          <svg id="overlay" class="overlay" viewBox="0 0 800 450" preserveAspectRatio="xMidYMid meet"></svg>
+
+          <div id="popup" class="popup" aria-hidden="true">
+            <div class="popup-title">选择替换家具</div>
+            <div id="popup-type" class="popup-type"></div>
+            <div id="popup-list" class="popup-list"></div>
+          </div>
+        </div>
+
+        <aside class="panel">
+          <h2>当前标注</h2>
+          <div id="selectionInfo" class="selection">
+            请选择一个家具
+          </div>
+          <div class="tips">
+            小提示：
+            <ul>
+              <li>点击家具高亮并弹出候选列表</li>
+              <li>选中候选项后，家具名称会更新</li>
+              <li>将真实户型图放到 assets/floorplan.jpg</li>
+            </ul>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -18,7 +18,7 @@ CITY_CODES = {
     "深圳市": "291",
 }
 
-DEV_NAMES = ["华润", "中海", "万科"]
+DEV_NAMES = ["华润", "中海", "万科","鸿荣源"]
 
 ROOMS = [1,2,3,4,5]
 
@@ -307,7 +307,7 @@ def main():
                     scroll_to_bottom(page)
                     page_state = wait_for_page_state(page, timeout_ms=30000)
                     wait_for_rendered_list(page, timeout_ms=45000)
-                    time.sleep(9)
+                    time.sleep(5)
                     if not page_state:
                         logger.warning("No __PAGE_STATE__ for %s", first_url)
                         progress[key] = {"start": start, "completed": True}
@@ -342,7 +342,7 @@ def main():
                         scroll_to_bottom(page)
                         page_state = wait_for_page_state(page, timeout_ms=30000)
                         wait_for_rendered_list(page, timeout_ms=45000)
-                        time.sleep(9)
+                        time.sleep(5)
                         if not page_state:
                             logger.warning("No __PAGE_STATE__ for %s", url)
                             page_idx += 1
