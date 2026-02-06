@@ -162,3 +162,6 @@ python3 /Users/hummingbird/Develop/anjuke-demo/scripts/kujiale_page_state_export
 
 python3 /Users/hummingbird/Develop/anjuke-demo/scripts/import_kujiale_json.py \
   --host 127.0.0.1 --port 5432 --user postgres --password fams --db chaodapei
+
+python3 /Users/hummingbird/Develop/anjuke-demo/scripts/import_kujiale_json.py \
+  --host 127.0.0.1 --port 5432 --user postgres --password fams --db chaodapei
